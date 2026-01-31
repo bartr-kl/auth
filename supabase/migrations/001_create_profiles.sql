@@ -5,7 +5,7 @@
 
 -- Create custom types for roles and DUPR types
 CREATE TYPE user_role AS ENUM ('user', 'staff', 'admin');
-CREATE TYPE dupr_type AS ENUM ('api', 'self', 'instructor');
+CREATE TYPE dupr_type AS ENUM ('default', 'api', 'self', 'instructor');
 
 -- Create profiles table
 CREATE TABLE public.profiles (
@@ -16,9 +16,9 @@ CREATE TABLE public.profiles (
   last_name TEXT,
   role user_role DEFAULT 'user' NOT NULL,
   address TEXT,
-  dupr_score_singles DECIMAL(4,2) CHECK (dupr_score_singles >= 2.0 AND dupr_score_singles <= 8.0),
-  dupr_score_doubles DECIMAL(4,2) CHECK (dupr_score_doubles >= 2.0 AND dupr_score_doubles <= 8.0),
-  dupr_type dupr_type,
+  dupr_score_singles DECIMAL(5,3) DEFAULT 2.0 NOT NULL CHECK (dupr_score_singles >= 2.0 AND dupr_score_singles <= 8.0),
+  dupr_score_doubles DECIMAL(5,3) DEFAULT 2.0 NOT NULL CHECK (dupr_score_doubles >= 2.0 AND dupr_score_doubles <= 8.0),
+  dupr_type dupr_type default 'default' NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
@@ -163,5 +163,5 @@ CREATE INDEX idx_profiles_phone ON public.profiles(phone);
 --
 -- UPDATE public.profiles
 -- SET role = 'admin'
--- WHERE email = 'your-email@example.com';
+-- WHERE email = 'bartr@outlook.com';
 -- =============================================================================

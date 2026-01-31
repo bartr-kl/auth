@@ -7,7 +7,7 @@
 
 # Configuration - CHANGE THESE!
 DOMAIN="yourdomain.com"
-EMAIL="your-email@example.com"
+EMAIL="bartr@outlook.com"
 
 # Colors for output
 RED='\033[0;31m'

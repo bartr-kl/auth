@@ -15,6 +15,44 @@ function getSupabaseAdmin() {
   )
 }
 
+// GET - List all users
+export async function GET() {
+  try {
+    const supabase = await createServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Get the user's profile to check role
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single() as { data: { role: string } | null }
+
+    if (!profile || (profile.role !== 'admin' && profile.role !== 'staff')) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
+    }
+
+    const { data: users, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('last_name', { ascending: true })
+      .order('first_name', { ascending: true })
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    return NextResponse.json({ users })
+  } catch (error) {
+    console.error('Error fetching users:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Verify the requesting user is staff or admin

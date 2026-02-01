@@ -1,24 +1,31 @@
--- =============================================================================
--- PaddleStack Admin Dashboard - Database Setup
--- Run this SQL in your Supabase SQL Editor
--- =============================================================================
+-- Drop existing objects if they exist
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP TRIGGER IF EXISTS on_profile_updated ON public.profiles;
+DROP FUNCTION IF EXISTS public.handle_new_user();
+DROP FUNCTION IF EXISTS public.handle_updated_at();
+DROP TABLE IF EXISTS public.profiles;
+DROP TYPE IF EXISTS dupr_type;
 
 -- Create custom types for roles and DUPR types
-CREATE TYPE user_role AS ENUM ('user', 'staff', 'admin');
 CREATE TYPE dupr_type AS ENUM ('default', 'api', 'self', 'instructor');
 
 -- Create profiles table
 CREATE TABLE public.profiles (
-  id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-  email TEXT,
+  id SERIAL PRIMARY KEY,
+  auth_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  username TEXT UNIQUE NOT NULL,
+  email TEXT NOT NULL,
   phone TEXT,
-  first_name TEXT,
-  last_name TEXT,
-  role user_role DEFAULT 'user' NOT NULL,
-  address TEXT,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  address TEXT NOT NULL,
+  suite TEXT,
+  city TEXT NOT NULL,
+  state TEXT NOT NULL,
+  zip TEXT NOT NULL,
   dupr_score_singles DECIMAL(5,3) DEFAULT 2.0 NOT NULL CHECK (dupr_score_singles >= 2.0 AND dupr_score_singles <= 8.0),
   dupr_score_doubles DECIMAL(5,3) DEFAULT 2.0 NOT NULL CHECK (dupr_score_doubles >= 2.0 AND dupr_score_doubles <= 8.0),
-  dupr_type dupr_type default 'default' NOT NULL,
+  dupr_type dupr_type DEFAULT 'default' NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
@@ -26,115 +33,50 @@ CREATE TABLE public.profiles (
 -- Enable Row Level Security
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
--- =============================================================================
--- Row Level Security Policies
--- =============================================================================
-
--- Users can view their own profile
+-- Policy: Users can view their own profile
 CREATE POLICY "Users can view own profile"
   ON public.profiles
   FOR SELECT
-  USING (auth.uid() = id);
+  USING (auth.uid() = auth_id);
 
--- Staff and Admins can view all profiles
-CREATE POLICY "Staff and admins can view all profiles"
-  ON public.profiles
-  FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE id = auth.uid()
-      AND role IN ('staff', 'admin')
-    )
-  );
-
--- Users can update their own profile (but not role)
+-- Policy: Users can update their own profile
 CREATE POLICY "Users can update own profile"
   ON public.profiles
   FOR UPDATE
-  USING (auth.uid() = id)
-  WITH CHECK (
-    auth.uid() = id
-    AND (
-      -- If not staff/admin, can't change their role
-      (SELECT role FROM public.profiles WHERE id = auth.uid()) NOT IN ('staff', 'admin')
-      OR role = (SELECT role FROM public.profiles WHERE id = auth.uid())
-    )
-  );
+  USING (auth.uid() = auth_id);
 
--- Staff can update user profiles (but not admin profiles or promote to admin)
-CREATE POLICY "Staff can update user profiles"
-  ON public.profiles
-  FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE id = auth.uid()
-      AND role = 'staff'
-    )
-    AND role = 'user'
-  )
-  WITH CHECK (role IN ('user', 'staff'));
-
--- Admins can update any profile
-CREATE POLICY "Admins can update any profile"
-  ON public.profiles
-  FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE id = auth.uid()
-      AND role = 'admin'
-    )
-  );
-
--- Allow insert for new users (handled by trigger)
-CREATE POLICY "Enable insert for authenticated users"
+-- Policy: Users can insert their own profile
+CREATE POLICY "Users can insert own profile"
   ON public.profiles
   FOR INSERT
-  WITH CHECK (auth.uid() = id);
+  WITH CHECK (auth.uid() = auth_id);
 
--- Admins and Staff can insert profiles (for creating users)
-CREATE POLICY "Staff and admins can insert profiles"
-  ON public.profiles
-  FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE id = auth.uid()
-      AND role IN ('staff', 'admin')
-    )
-  );
-
--- =============================================================================
--- Trigger to auto-create profile on signup
--- =============================================================================
-
+-- Function to handle new user creation
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, phone, first_name, last_name)
+  INSERT INTO public.profiles (auth_id, username, email, first_name, last_name, address, city, state, zip)
   VALUES (
     NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'username', NEW.email),
     NEW.email,
-    NEW.phone,
-    NEW.raw_user_meta_data->>'first_name',
-    NEW.raw_user_meta_data->>'last_name'
+    COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
+    COALESCE(NEW.raw_user_meta_data->>'last_name', ''),
+    COALESCE(NEW.raw_user_meta_data->>'address', ''),
+    COALESCE(NEW.raw_user_meta_data->>'city', ''),
+    COALESCE(NEW.raw_user_meta_data->>'state', ''),
+    COALESCE(NEW.raw_user_meta_data->>'zip', '')
   );
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Create trigger
+-- Trigger to automatically create profile on user signup
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
-  FOR EACH ROW
-  EXECUTE FUNCTION public.handle_new_user();
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- =============================================================================
--- Trigger to update updated_at timestamp
--- =============================================================================
-
+-- Function to update the updated_at timestamp
 CREATE OR REPLACE FUNCTION public.handle_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -143,25 +85,22 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Trigger to automatically update updated_at on profile changes
 CREATE TRIGGER on_profile_updated
   BEFORE UPDATE ON public.profiles
-  FOR EACH ROW
-  EXECUTE FUNCTION public.handle_updated_at();
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- =============================================================================
--- Create indexes for better query performance
--- =============================================================================
+update public.profiles set username = 'bartr',
+  first_name = 'Bart',
+  last_name = 'Robertson',
+  address = '10417 Brimfield Drive',
+  city = 'Austin',
+  state = 'TX',
+  zip = '78726',
+  phone = '512-417-0000',
+  dupr_score_doubles = 3.024,
+  dupr_score_singles = 2.911,
+  dupr_type = 'api'
+where email = 'bartr@outlook.com';
 
-CREATE INDEX idx_profiles_role ON public.profiles(role);
-CREATE INDEX idx_profiles_email ON public.profiles(email);
-CREATE INDEX idx_profiles_phone ON public.profiles(phone);
-
--- =============================================================================
--- Optional: Create your first admin user
--- After running this migration, sign up with an email/password,
--- then run this query to make yourself an admin:
---
--- UPDATE public.profiles
--- SET role = 'admin'
--- WHERE email = 'bartr@outlook.com';
--- =============================================================================
+select * from profiles;

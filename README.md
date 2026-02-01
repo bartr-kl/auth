@@ -72,6 +72,6 @@ bartr should have an admin and member role in all locations
 ## Create app
 Create a next.js app that will be deployed on Vercel using supabase for auth and database storage.
 
-The app should have /api/* routes that expose open API crud endpoints for the profiles table.
+The app should have /api/* routes that expose open API crud endpoints for the profiles, orgs, locations, and user_role tables.
 
 The app should have an admin dashboard that provides the same CRUD capabilities.

@@ -13,19 +13,22 @@ CREATE TYPE dupr_type AS ENUM ('default', 'api', 'self', 'instructor');
 CREATE TABLE public.profiles (
   id SERIAL PRIMARY KEY,
   auth_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  username TEXT UNIQUE NOT NULL,
-  email TEXT NOT NULL,
-  phone TEXT,
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
-  address TEXT NOT NULL,
+  username TEXT UNIQUE NOT NULL,
+  display_name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT,
+  address TEXT,
   suite TEXT,
-  city TEXT NOT NULL,
-  state TEXT NOT NULL,
-  zip TEXT NOT NULL,
+  city TEXT,
+  state TEXT,
+  zip TEXT,
   dupr_score_singles DECIMAL(5,3) DEFAULT 2.0 NOT NULL CHECK (dupr_score_singles >= 2.0 AND dupr_score_singles <= 8.0),
   dupr_score_doubles DECIMAL(5,3) DEFAULT 2.0 NOT NULL CHECK (dupr_score_doubles >= 2.0 AND dupr_score_doubles <= 8.0),
   dupr_type dupr_type DEFAULT 'default' NOT NULL,
+  global_admin BOOLEAN DEFAULT FALSE NOT NULL,
+  avatar_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
@@ -51,31 +54,6 @@ CREATE POLICY "Users can insert own profile"
   FOR INSERT
   WITH CHECK (auth.uid() = auth_id);
 
--- Function to handle new user creation
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO public.profiles (auth_id, username, email, first_name, last_name, address, city, state, zip)
-  VALUES (
-    NEW.id,
-    COALESCE(NEW.raw_user_meta_data->>'username', NEW.email),
-    NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
-    COALESCE(NEW.raw_user_meta_data->>'last_name', ''),
-    COALESCE(NEW.raw_user_meta_data->>'address', ''),
-    COALESCE(NEW.raw_user_meta_data->>'city', ''),
-    COALESCE(NEW.raw_user_meta_data->>'state', ''),
-    COALESCE(NEW.raw_user_meta_data->>'zip', '')
-  );
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Trigger to automatically create profile on user signup
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
 -- Function to update the updated_at timestamp
 CREATE OR REPLACE FUNCTION public.handle_updated_at()
 RETURNS TRIGGER AS $$
@@ -90,17 +68,19 @@ CREATE TRIGGER on_profile_updated
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
-update public.profiles set username = 'bartr',
-  first_name = 'Bart',
-  last_name = 'Robertson',
-  address = '10417 Brimfield Drive',
-  city = 'Austin',
-  state = 'TX',
-  zip = '78726',
-  phone = '512-417-0000',
-  dupr_score_doubles = 3.024,
-  dupr_score_singles = 2.911,
-  dupr_type = 'api'
+update public.profiles
+  set username = 'bartr',
+      first_name = 'Bart',
+      last_name = 'Robertson',
+      address = '10417 Brimfield Drive',
+      city = 'Austin',
+      state = 'TX',
+      zip = '78726',
+      phone = '512-417-0000',
+      dupr_score_doubles = 3.024,
+      dupr_score_singles = 2.911,
+      dupr_type = 'api',
+      global_admin = true
 where email = 'bartr@outlook.com';
 
 select * from profiles;

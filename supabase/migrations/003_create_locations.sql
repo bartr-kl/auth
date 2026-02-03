@@ -1,7 +1,7 @@
 -- Drop existing objects if they exist
 DROP TRIGGER IF EXISTS on_location_updated ON public.locations;
 DROP FUNCTION IF EXISTS public.handle_locations_updated_at();
-DROP TABLE IF EXISTS public.locations;
+DROP TABLE IF EXISTS public.locations cascade;
 
 -- Create locations table
 CREATE TABLE public.locations (
@@ -55,7 +55,7 @@ CREATE TRIGGER on_location_updated
 INSERT INTO public.locations (id, org_id, name, description, street, suite, city, state, zip, phone, web_url)
 VALUES
   (
-    'picklr-austin-west',
+    'austin-west',
     'picklr',
     'Picklr Austin West',
     'The Picklr - Austin West',
@@ -68,7 +68,7 @@ VALUES
     'https://austinwest.thepicklr.com/'
   ),
   (
-    'picklr-round-rock',
+    'round-rock',
     'picklr',
     'Picklr Round Rock',
     'The Picklr - Round Rock',
@@ -82,7 +82,7 @@ VALUES
   ),
   (
     'pickle-ranch',
-    'pickle-ranch',
+    'ranch',
     'Pickle Ranch',
     'The Pickle Ranch',
     '11000 Middle Fiskville Road',
